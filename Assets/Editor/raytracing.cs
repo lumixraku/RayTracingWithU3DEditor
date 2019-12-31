@@ -202,15 +202,18 @@ namespace SimpleRT
             return colors;
         }
         #endregion
-        #region 第五版（测试Hit的抽象）
+        #region 第五版（测试Hit的抽象）(抽象碰撞信息)
         Color GetColorForTestHitRecord(Ray ray, HitableList hitableList)
         {
             HitRecord record = new HitRecord();
             if (hitableList.Hit(ray, 0f, float.MaxValue, ref record))
-            {
+            {   
+                // 没有直接返回 record.normal.xyz 是因为默认颜色有点暗
                 return 0.5f * new Color(record.normal.x + 1, record.normal.y + 1, record.normal.z + 1, 2f);
             }
             float t = 0.5f * ray.normalDirection.y + 1f;
+
+            // 控制浅蓝的背景色  
             return (1 - t) * new Color(1, 1, 1) + t * new Color(0.5f, 0.7f, 1);
         }
 
@@ -226,10 +229,14 @@ namespace SimpleRT
             hitableList.list.Add(new SimpleSphere(new Vector3(0, 0, -1), 0.5f));  //第一个参数是球心  第2个参数是半径
             hitableList.list.Add(new SimpleSphere(new Vector3(0, -100.5f, -1), 100f));
             Color[] colors = new Color[l];
+
+            float recip_width = 1f / width;  // 1/400
+            float recip_height = 1f / height;  // 1/200
+
             for (int j = height - 1; j >= 0; j--)
                 for (int i = 0; i < width; i++)
                 {
-                    Ray r = new Ray(original, lowLeftCorner + horizontal * i / (float)width + vertical * j / (float)height);
+                    Ray r = new Ray(original, lowLeftCorner + horizontal * i / recip_width + vertical * j / recip_height);
                     colors[i + j * width] = GetColorForTestHitRecord(r, hitableList);
                 }
             return colors;
@@ -244,6 +251,8 @@ namespace SimpleRT
                 return 0.5f * new Color(record.normal.x + 1, record.normal.y + 1, record.normal.z + 1, 2f);
             }
             float t = 0.5f * ray.normalDirection.y + 1f;
+
+            // 控制浅蓝的背景色  
             return (1 - t) * new Color(1, 1, 1) + t * new Color(0.5f, 0.7f, 1);
         }
 
@@ -269,14 +278,18 @@ namespace SimpleRT
                 for (int i = 0; i < width; i++)
                 {
                     Color color = new Color(0, 0, 0);
+
+                    // 每个像素点都再发射100条光线去采样计算
                     for (int s = 0; s < SAMPLE; s++)
                     {   
                         // _M.R() 生成0~1随机数
-                        // 创建的ray  出发点在球心  也就是original
-                        Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
+                        // 创建的ray  出发点在球心  也就是original  //注意 ！！ CreateRay包含了vertical 和 horizontal 的尺寸计算
+                         Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
+                        //下面关闭抗锯齿的情形，就和第5版一样的
+                        //Ray r = camera.CreateRay(i * recip_width, j * recip_height);
                         color += GetColorForTestAntialiasing(r, hitableList);
                     }
-                    // color *= SAMPLE_WEIGHT;
+                    color *= SAMPLE_WEIGHT;
                     color.a = 1f;
                     colors[i + j * width] = color;
                 }
@@ -286,15 +299,17 @@ namespace SimpleRT
         #region 第七版（测试Diffuse）
         //此处用于取得无序的反射方向，并用于模拟散射模型
         Vector3 GetRandomPointInUnitSphereForTestDiffusing()
-        {
+        {   
+            // Vector3(_M.R(), _M.R(), _M.R()) 这个向量的每一个分量变化范围是 0~1
+            // 现在要得到 [-1, 1]
             Vector3 p = 2f * new Vector3(_M.R(), _M.R(), _M.R()) - Vector3.one;
-            p = p.normalized * _M.R();
+            p = p.normalized;
             //Vector3 p = Vector3.zero;
             //do
             //{
             //    p = 2f * new Vector3(_M.R(), _M.R(), _M.R()) - Vector3.one;
             //}
-            //while (p.sqrMagnitude > 1f);
+            //while (p.sqrMagnitude > 1f); // sqrMagnitude  返回向量的长度
             return p;
         }
 
@@ -320,6 +335,8 @@ namespace SimpleRT
             Vector3 original = new Vector3(0, 0, 0);
             int l = width * height;
             HitableList hitableList = new HitableList();
+
+            // 创建了两个球体
             hitableList.list.Add(new SimpleSphere(new Vector3(0, 0, -1), 0.5f));
             hitableList.list.Add(new SimpleSphere(new Vector3(0, -100.5f, -1), 100f));
             Color[] colors = new Color[l];
@@ -330,15 +347,16 @@ namespace SimpleRT
                 for (int i = 0; i < width; i++)
                 {
                     Color color = new Color(0, 0, 0);
-                    for (int s = 0; s < SAMPLE; s++)
+                    for (int s = 0; s < SAMPLE/10; s++)
                     {
                         Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
                         color += GetColorForTestDiffusing(r, hitableList);
                     }
-                    color *= SAMPLE_WEIGHT;
+                    // 刚才上面color 加了 SAMPLE 次光线  导致球体本身很亮
+                    color *= (1.0f/(1.0f * SAMPLE/10f));
                     //为了使球体看起来更亮，改变gamma值
-                    //color = new Color(Mathf.Sqrt(color.r), Mathf.Sqrt(color.g), Mathf.Sqrt(color.b), 1f);
-                    color.a = 1f;
+                    color = new Color(Mathf.Sqrt(color.r), Mathf.Sqrt(color.g), Mathf.Sqrt(color.b), 1f);
+                    // color.a = 1f;
                     colors[i + j * width] = color;
                 }
             return colors;
@@ -376,10 +394,10 @@ namespace SimpleRT
             Vector3 original = new Vector3(0, 0, 0);
             int l = width * height;
             HitableList hitableList = new HitableList();
-            hitableList.list.Add(new Sphere(new Vector3(0, 0, -1), 0.5f, new Lambertian(new Color(0.8f, 0.3f, 0.3f))));
+            hitableList.list.Add(new Sphere(new Vector3(0, 0, -1), 0.5f, new Lambertian(new Color(0.3f, 0.3f, 0.3f))));
             hitableList.list.Add(new Sphere(new Vector3(0, -100.5f, -1), 100f, new Lambertian(new Color(0.8f, 0.8f, 0.0f))));
-            hitableList.list.Add(new Sphere(new Vector3(1, 0, -1), 0.5f, new Metal(new Color(0.8f, 0.6f, 0.2f), 0.3f)));
             hitableList.list.Add(new Sphere(new Vector3(-1, 0, -1), 0.5f, new Metal(new Color(0.8f, 0.8f, 0.8f), 1.0f)));
+            hitableList.list.Add(new Sphere(new Vector3(0, 1f, -1), 0.5f, new Metal(new Color(0.8f, 0.8f, 0.8f), 0.0f))); // 设置fuzz为0  表示一个干净的镜面
             Color[] colors = new Color[l];
             SimpleCamera camera = new SimpleCamera(original, lowLeftCorner, horizontal, vertical);
             float recip_width = 1f / width;
@@ -388,12 +406,12 @@ namespace SimpleRT
                 for (int i = 0; i < width; i++)
                 {
                     Color color = new Color(0, 0, 0);
-                    for (int s = 0; s < SAMPLE; s++)
+                    for (int s = 0; s < SAMPLE/10; s++)
                     {
                         Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
                         color += GetColorForTestMetal(r, hitableList, 0);
                     }
-                    color *= SAMPLE_WEIGHT;
+                    color *= SAMPLE_WEIGHT*10f;
                     //为了使球体看起来更亮，改变gamma值
                     color = new Color(Mathf.Sqrt(color.r), Mathf.Sqrt(color.g), Mathf.Sqrt(color.b), 1f);
                     color.a = 1f;
@@ -625,6 +643,8 @@ namespace SimpleRT
         }
     }
 
+
+    // 延长长度t、交点p、交点处的法线方向
     public class HitRecord
     {
         public float t;
