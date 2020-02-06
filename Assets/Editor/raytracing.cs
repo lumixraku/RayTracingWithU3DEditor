@@ -48,7 +48,7 @@ namespace SimpleRT
             }
             if (GUILayout.Button("测试镜面模型"))
             {
-                CreatePng(WIDTH, HEIGHT, CreateColorForTestMetal(WIDTH, HEIGHT));
+                CreatePng(WIDTH * 2, HEIGHT, CreateColorForTestMetal(WIDTH * 2, HEIGHT));
             }
             if (GUILayout.Button("测试透明模型"))
             {
@@ -207,7 +207,7 @@ namespace SimpleRT
         {
             HitRecord record = new HitRecord();
             if (hitableList.Hit(ray, 0f, float.MaxValue, ref record))
-            {   
+            {
                 // 没有直接返回 record.normal.xyz 是因为默认颜色有点暗
                 return 0.5f * new Color(record.normal.x + 1, record.normal.y + 1, record.normal.z + 1, 2f);
             }
@@ -246,8 +246,12 @@ namespace SimpleRT
         Color GetColorForTestAntialiasing(Ray ray, HitableList hitableList)
         {
             HitRecord record = new HitRecord();
+
+            // 实际上调用的是 SimpleSphere 的 Hit
             if (hitableList.Hit(ray, 0f, float.MaxValue, ref record))
             {
+
+                // 这里+1 都是为了更好的视觉效果
                 return 0.5f * new Color(record.normal.x + 1, record.normal.y + 1, record.normal.z + 1, 2f);
             }
             float t = 0.5f * ray.normalDirection.y + 1f;
@@ -256,22 +260,30 @@ namespace SimpleRT
             return (1 - t) * new Color(1, 1, 1) + t * new Color(0.5f, 0.7f, 1);
         }
 
-        
+
         Color[] CreateColorForTestAntialiasing(int width, int height)
         {
             // width height 是像素点单位400  200
+            // 视锥体的左下角、长宽和起始扫射点设定
 
-            //视锥体的左下角、长宽和起始扫射点设定
             Vector3 lowLeftCorner = new Vector3(-2, -1, -1);
             Vector3 horizontal = new Vector3(4, 0, 0);
             Vector3 vertical = new Vector3(0, 2, 0);
             Vector3 original = new Vector3(0, 0, 0);
             int l = width * height;
             HitableList hitableList = new HitableList();
+
+            //这样的球在偏右的位置
+            //hitableList.list.Add(new SimpleSphere(new Vector3(1, 0, -1), 0.5f));
             hitableList.list.Add(new SimpleSphere(new Vector3(0, 0, -1), 0.5f));
             hitableList.list.Add(new SimpleSphere(new Vector3(0, -100.5f, -1), 100f));
             Color[] colors = new Color[l];
-            SimpleCamera camera = new SimpleCamera(original, lowLeftCorner, horizontal, vertical);
+
+
+            // 摄像头在0 0 0的位置
+            // 屏幕在 z轴 -1 的位置
+            // 传统的右手坐标系
+            SimpleCamera camera = new SimpleCamera(original + new Vector3(0, 0, 3), lowLeftCorner, horizontal, vertical);
             float recip_width = 1f / width;  // 1/400
             float recip_height = 1f / height;  // 1/200
             for (int j = height - 1; j >= 0; j--)
@@ -280,26 +292,26 @@ namespace SimpleRT
                     Color color = new Color(0, 0, 0);
 
                     // 每个像素点都再发射100条光线去采样计算
-                    for (int s = 0; s < SAMPLE; s++)
-                    {   
+                    for (int s = 0; s < SAMPLE / 10; s++)
+                    {
                         // _M.R() 生成0~1随机数
                         // 创建的ray  出发点在球心  也就是original  //注意 ！！ CreateRay包含了vertical 和 horizontal 的尺寸计算
-                         Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
+                        Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
                         //下面关闭抗锯齿的情形，就和第5版一样的
                         //Ray r = camera.CreateRay(i * recip_width, j * recip_height);
                         color += GetColorForTestAntialiasing(r, hitableList);
                     }
-                    color *= SAMPLE_WEIGHT;
+                    color *= SAMPLE_WEIGHT * 10;
                     color.a = 1f;
                     colors[i + j * width] = color;
                 }
             return colors;
         }
         #endregion
-        #region 第七版（测试Diffuse）
+        #region 第七版（测试Diffuse）（散射模型）
         //此处用于取得无序的反射方向，并用于模拟散射模型
         Vector3 GetRandomPointInUnitSphereForTestDiffusing()
-        {   
+        {
             // Vector3(_M.R(), _M.R(), _M.R()) 这个向量的每一个分量变化范围是 0~1
             // 现在要得到 [-1, 1]
             Vector3 p = 2f * new Vector3(_M.R(), _M.R(), _M.R()) - Vector3.one;
@@ -312,15 +324,20 @@ namespace SimpleRT
             //while (p.sqrMagnitude > 1f); // sqrMagnitude  返回向量的长度
             return p;
         }
-
+        // https://www.guokr.com/question/569971/ 
+        // 光线追踪 如果遇到漫反射面的话一般是需要产生非常多的次级射线往下递归才能达到比较好的效果（否则噪点比较明显）
         Color GetColorForTestDiffusing(Ray ray, HitableList hitableList)
         {
             HitRecord record = new HitRecord();
+            // 这里对应的是 simpleSphere 的 Hit 方法
             if (hitableList.Hit(ray, 0.0001f, float.MaxValue, ref record))
             {
                 Vector3 target = record.p + record.normal + GetRandomPointInUnitSphereForTestDiffusing();
                 //此处假定有50%的光被吸收，剩下的则从入射点开始取随机方向再次发射一条射线
-                return 0.5f * GetColorForTestDiffusing(new Ray(record.p, target - record.p), hitableList);
+                //return 0.5f * GetColorForTestDiffusing(new Ray(record.p, target - record.p), hitableList);
+
+                // 即便稳重说的是使用随机的光线 但是即使是漫反射 也还是和物体本身的法线方向相关的  //所以这里还需要考虑到法线
+                return 0.5f * GetColorForTestDiffusing(new Ray(record.p, record.normal + GetRandomPointInUnitSphereForTestDiffusing() * 0.5f), hitableList);
             }
             float t = 0.5f * ray.normalDirection.y + 1f;
             return (1 - t) * new Color(1, 1, 1) + t * new Color(0.5f, 0.7f, 1);
@@ -347,13 +364,13 @@ namespace SimpleRT
                 for (int i = 0; i < width; i++)
                 {
                     Color color = new Color(0, 0, 0);
-                    for (int s = 0; s < SAMPLE/10; s++)
+                    for (int s = 0; s < SAMPLE; s++)
                     {
                         Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
                         color += GetColorForTestDiffusing(r, hitableList);
                     }
                     // 刚才上面color 加了 SAMPLE 次光线  导致球体本身很亮
-                    color *= (1.0f/(1.0f * SAMPLE/10f));
+                    color *= SAMPLE_WEIGHT;
                     //为了使球体看起来更亮，改变gamma值
                     color = new Color(Mathf.Sqrt(color.r), Mathf.Sqrt(color.g), Mathf.Sqrt(color.b), 1f);
                     // color.a = 1f;
@@ -366,13 +383,18 @@ namespace SimpleRT
         Color GetColorForTestMetal(Ray ray, HitableList hitableList, int depth)
         {
             HitRecord record = new HitRecord();
+
+            // 当光线撞击在球上的时候  // 这里包括了法线毛绒球和两个金属球
             if (hitableList.Hit(ray, 0.0001f, float.MaxValue, ref record))
             {
                 Ray r = new Ray(Vector3.zero, Vector3.zero);
                 Color attenuation = Color.black;
-                if (depth < MAX_SCATTER_TIME && record.material.scatter(ray, record, ref attenuation, ref r))
+
+                // 说一下scatter 调用中的 ref 关键字   这个表示按照引用传递  因此后面运算中的attenuation 的值是材质本身设定的衰减值  并不是black
+                // material 是 Metal  和 漫反射的毛绒球（兰伯特光照)  不同的材质对scatter 有不同的实现
+                if (depth < MAX_SCATTER_TIME / 10 && record.material.scatter(ray, record, ref attenuation, ref r))
                 {
-                    Color c = GetColorForTestMetal(r, hitableList, depth + 1);
+                    Color c = GetColorForTestMetal(r, hitableList, depth + 1); //将镜面反射的光线再次进行碰撞计算
                     return new Color(c.r * attenuation.r, c.g * attenuation.g, c.b * attenuation.b);
                 }
                 else
@@ -388,30 +410,34 @@ namespace SimpleRT
         Color[] CreateColorForTestMetal(int width, int height)
         {
             //视锥体的左下角、长宽和起始扫射点设定
-            Vector3 lowLeftCorner = new Vector3(-2, -1, -1);
-            Vector3 horizontal = new Vector3(4, 0, 0);
+            Vector3 lowLeftCorner = new Vector3(-4, -1, -1);
+            Vector3 horizontal = new Vector3(8, 0, 0);
             Vector3 vertical = new Vector3(0, 2, 0);
             Vector3 original = new Vector3(0, 0, 0);
             int l = width * height;
             HitableList hitableList = new HitableList();
             hitableList.list.Add(new Sphere(new Vector3(0, 0, -1), 0.5f, new Lambertian(new Color(0.3f, 0.3f, 0.3f))));
             hitableList.list.Add(new Sphere(new Vector3(0, -100.5f, -1), 100f, new Lambertian(new Color(0.8f, 0.8f, 0.0f))));
-            hitableList.list.Add(new Sphere(new Vector3(-1, 0, -1), 0.5f, new Metal(new Color(0.8f, 0.8f, 0.8f), 1.0f)));
-            hitableList.list.Add(new Sphere(new Vector3(0, 1f, -1), 0.5f, new Metal(new Color(0.8f, 0.8f, 0.8f), 0.0f))); // 设置fuzz为0  表示一个干净的镜面
+            hitableList.list.Add(new Sphere(new Vector3(-1, 0, -1), 0.5f, new Metal(new Color(0.8f, 0.8f, 0.8f), 0.3f))); //Metal 的带个参数是albedo 反照率
+            hitableList.list.Add(new Sphere(new Vector3(1, 0, -1), 0.5f, new Metal(new Color(0.8f, 0.8f, 0.8f), 0.0f))); // 设置fuzz为0  表示一个干净的镜面
             Color[] colors = new Color[l];
-            SimpleCamera camera = new SimpleCamera(original, lowLeftCorner, horizontal, vertical);
+
+            //之前的视觉锥体变形比较厉害  现在把摄像机离远一点
+            //右手坐标系  屏幕的z轴是 -1 
+            SimpleCamera camera = new SimpleCamera(original + new Vector3(0, 0, 3), lowLeftCorner, horizontal, vertical);
             float recip_width = 1f / width;
             float recip_height = 1f / height;
             for (int j = height - 1; j >= 0; j--)
                 for (int i = 0; i < width; i++)
                 {
                     Color color = new Color(0, 0, 0);
-                    for (int s = 0; s < SAMPLE/10; s++)
+                    for (int s = 0; s < SAMPLE / 10; s++)
                     {
+                        // 光线的出发点就是摄像机
                         Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
                         color += GetColorForTestMetal(r, hitableList, 0);
                     }
-                    color *= SAMPLE_WEIGHT*10f;
+                    color *= SAMPLE_WEIGHT * 10f;
                     //为了使球体看起来更亮，改变gamma值
                     color = new Color(Mathf.Sqrt(color.r), Mathf.Sqrt(color.g), Mathf.Sqrt(color.b), 1f);
                     color.a = 1f;
@@ -420,6 +446,13 @@ namespace SimpleRT
             return colors;
         }
         #endregion
+
+
+
+        // 传统右手坐标系 Z值越小 离人眼越近
+        // 之前调整参数 光源在 0 0 3 的位置
+        // 屏幕Z轴在 -3 的位置
+
         #region 第九版（测试透明）
         Color GetColorForTestDielectric(Ray ray, HitableList hitableList, int depth)
         {
@@ -443,33 +476,46 @@ namespace SimpleRT
             return (1 - t) * new Color(1, 1, 1) + t * new Color(0.5f, 0.7f, 1);
         }
 
+        // 测试透明模型
         Color[] CreateColorForTestDielectric(int width, int height)
         {
+            // 透明材料（例如水，玻璃和钻石）是电介质。 当光线射到它们上时，它分裂为反射射线和折射（透射）射线。 
+
             //视锥体的左下角、长宽和起始扫射点设定
-            Vector3 lowLeftCorner = new Vector3(-2, -1, -1);
+            Vector3 lowLeftCorner = new Vector3(-2, -1, -3);
             Vector3 horizontal = new Vector3(4, 0, 0);
             Vector3 vertical = new Vector3(0, 2, 0);
             Vector3 original = new Vector3(0, 0, 0);
             int l = width * height;
             HitableList hitableList = new HitableList();
+
+            // 漫反射 中间的红色金属球
             hitableList.list.Add(new Sphere(new Vector3(0, 0, -1), 0.5f, new Lambertian(new Color(0.8f, 0.3f, 0.3f))));
+
+            // 漫反射 //底部的绿色球
             hitableList.list.Add(new Sphere(new Vector3(0, -100.5f, -1), 100f, new Lambertian(new Color(0.8f, 0.8f, 0.0f))));
+
+            // 右侧的金属球
             hitableList.list.Add(new Sphere(new Vector3(1, 0, -1), 0.5f, new Metal(new Color(0.8f, 0.6f, 0.2f), 0f)));
+
+            // 左侧透明球
             hitableList.list.Add(new Sphere(new Vector3(-1, 0, -1), 0.5f, new Dielectirc(1.5f)));
+            // 1.3 是水的折射率  玻璃折射率是1.5
+
             Color[] colors = new Color[l];
-            SimpleCamera camera = new SimpleCamera(original, lowLeftCorner, horizontal, vertical);
+            SimpleCamera camera = new SimpleCamera(original + new Vector3(0, 0, 3), lowLeftCorner, horizontal, vertical);
             float recip_width = 1f / width;
             float recip_height = 1f / height;
             for (int j = height - 1; j >= 0; j--)
                 for (int i = 0; i < width; i++)
                 {
                     Color color = new Color(0, 0, 0);
-                    for (int s = 0; s < SAMPLE; s++)
+                    for (int s = 0; s < SAMPLE / 10; s++)
                     {
                         Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
                         color += GetColorForTestDielectric(r, hitableList, 0);
                     }
-                    color *= SAMPLE_WEIGHT;
+                    color *= SAMPLE_WEIGHT * 10f;
                     //为了使球体看起来更亮，改变gamma值
                     color = new Color(Mathf.Sqrt(color.r), Mathf.Sqrt(color.g), Mathf.Sqrt(color.b), 1f);
                     color.a = 1f;
@@ -510,24 +556,38 @@ namespace SimpleRT
             Vector3 original = new Vector3(0, 0, 0);
             int l = width * height;
             HitableList hitableList = new HitableList();
+            //紫色球
             hitableList.list.Add(new Sphere(new Vector3(0, 0, -1), 0.5f, new Lambertian(new Color(0.8f, 0.3f, 0.3f))));
+
+            //下方的绿色球
             hitableList.list.Add(new Sphere(new Vector3(0, -100.5f, -1), 100f, new Lambertian(new Color(0.8f, 0.8f, 0.0f))));
-            hitableList.list.Add(new Sphere(new Vector3(1, 0, -1), 0.5f, new Metal(new Color(0.8f, 0.6f, 0.2f), 0f)));
+
+            // 右侧的球 调整FOV后在最上方
+            hitableList.list.Add(new Sphere(new Vector3(1, 0, -1), 0.5f, new Metal(new Color(0.2f, 0.6f, 0.9f), 0f)));
+
+            // 左侧的球 调整FOV
             hitableList.list.Add(new Sphere(new Vector3(-1, 0, -1), 0.5f, new Dielectirc(1.5f)));
+
             Color[] colors = new Color[l];
-            Camera camera = new Camera(new Vector3(-2, 1f, -1), new Vector3(-1, 0, -1), Vector3.up, 75, width / height);
+
+            // 从左上角向下俯视
+            // Vector3.up 就是 Vector3(0, 1, 0).
+
+            //public Camera(Vector3 lookFrom, Vector3 lookat, Vector3 vup, float vfov, float aspect, float r = 0, float focus_dist = 1)
+            //
+            Camera camera = new Camera(new Vector3(-2, 2f, 1), new Vector3(0, 0, -1), Vector3.up, 75, width / height);
             float recip_width = 1f / width;
             float recip_height = 1f / height;
             for (int j = height - 1; j >= 0; j--)
                 for (int i = 0; i < width; i++)
                 {
                     Color color = new Color(0, 0, 0);
-                    for (int s = 0; s < SAMPLE; s++)
+                    for (int s = 0; s < SAMPLE/10; s++)
                     {
                         Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
                         color += GetColorForTestCamera(r, hitableList, 0);
                     }
-                    color *= SAMPLE_WEIGHT;
+                    color *= SAMPLE_WEIGHT*10;
                     //为了使球体看起来更亮，改变gamma值
                     color = new Color(Mathf.Sqrt(color.r), Mathf.Sqrt(color.g), Mathf.Sqrt(color.b), 1f);
                     color.a = 1f;
@@ -573,7 +633,7 @@ namespace SimpleRT
             hitableList.list.Add(new Sphere(new Vector3(0, 0, -1), 0.5f, new Lambertian(new Color(0.2f, 0.2f, 0.8f))));
             hitableList.list.Add(new Sphere(new Vector3(0, -100.5f, -1), 100f, new Lambertian(new Color(0.8f, 0.8f, 0.0f))));
             hitableList.list.Add(new Sphere(new Vector3(1, 0, -1), 0.5f, new Metal(new Color(0.8f, 0.6f, 0.2f), 0f)));
-            hitableList.list.Add(new Sphere(new Vector3(-1, 0, -1), 0.5f, new Dielectirc(1.5f)));
+            hitableList.list.Add(new Sphere(new Vector3(-1, 0, -1), 0.5f, new Dielectirc(1.5f))); //折射率都是大于1的
             Color[] colors = new Color[l];
             Vector3 from = new Vector3(10, 2f, -2);
             Vector3 to = new Vector3(0, 1, 0);
@@ -687,9 +747,14 @@ namespace SimpleRT
             return hitAnything;
         }
     }
+
+
+
     /// <summary>
     /// 前几个部分使用的简化版摄像机
     /// </summary>
+
+    // 需要注明的是 所看到的图片 实际上是由camera的第一个参数 origin 向幕布发出光线形成的图
     public class SimpleCamera
     {
         public Vector3 position;
@@ -700,8 +765,8 @@ namespace SimpleRT
         {
             position = pos;
             lowLeftCorner = llc;
-            horizontal = hor;
-            vertical = ver;
+            horizontal = hor; //逻辑上的长和宽
+            vertical = ver; //逻辑上的长和宽
         }
 
         // u v 表示相机位置的百分比
@@ -719,7 +784,11 @@ namespace SimpleRT
         public Vector3 vertical;
         public Vector3 u, v, w;
         public float radius;
+
         ///此处FOV是欧拉角
+        // vfov表示视野范围（类似于广角镜头的概念）
+        // vup 是摄像头所在的位置
+        // lookFrom 和 lookat 共同决定摄像头的的朝向  也就是相机往哪边看的问题
         public Camera(Vector3 lookFrom, Vector3 lookat, Vector3 vup, float vfov, float aspect, float r = 0, float focus_dist = 1)
         {
             radius = r * 0.5f;
@@ -727,6 +796,8 @@ namespace SimpleRT
             float halfHeight = Mathf.Tan(unitAngle * 0.5f);
             float halfWidth = aspect * halfHeight;
             position = lookFrom;
+
+            // w u v 的含义在书中有图片说明
             w = (lookat - lookFrom).normalized;
             u = Vector3.Cross(vup, w).normalized;
             v = Vector3.Cross(w, u).normalized;
@@ -787,6 +858,8 @@ namespace SimpleRT
         public static bool refract(Vector3 vin, Vector3 normal, float ni_no, ref Vector3 refracted)
         {
             Vector3 uvin = vin.normalized;
+            // https://zhuanlan.zhihu.com/p/31127076
+            // https://blog.csdn.net/yinhun2012/article/details/79472364
             float dt = Vector3.Dot(uvin, normal);
             float discrimination = 1 - ni_no * ni_no * (1 - dt * dt);
             if (discrimination > 0)
@@ -796,6 +869,14 @@ namespace SimpleRT
             }
             return false;
         }
+
+
+        // 菲涅尔（发音为Fresnel）方程描述的是被反射的光线对比光线被折射的部分所占的比率，这个比率会随着我们观察的角度不同而不同。        
+        // 反射系数的求解是是一个非常复杂的过程，Christophe Schlick这个人提供一个逼近公式，这个公式被称为“ChristopheSchlick’s Approximation”。Wiki链接：
+        // https://en.wikipedia.org/wiki/Schlick%27s_approximation
+
+        // 也可以参考 https://learnopengl-cn.github.io/07%20PBR/01%20Theory/
+
         /// <summary>
         /// Schilick近似菲涅尔反射
         /// </summary>
@@ -862,6 +943,9 @@ namespace SimpleRT
             {
                 //带入并计算出最靠近射线源的点
                 //这里就是一元二次方程球根公式的解
+                // Debug.LogFormat("Hitable discriminant {0}", discriminant);
+                // Log File locates in ~/Library/Logs/Unity
+
                 float temp = (-b - Mathf.Sqrt(discriminant)) / a * 0.5f;
                 if (temp < t_max && temp > t_min)
                 {
@@ -959,7 +1043,7 @@ namespace SimpleRT
             Vector3 reflected = _M.reflect(rayIn.normalDirection, record.normal);
             scattered = new Ray(record.p, reflected + fuzz * _M.GetRandomPointInUnitSphere());
             attenuation = albedo;
-            return Vector3.Dot(scattered.direction, record.normal) > 0;
+            return Vector3.Dot(scattered.direction, record.normal) > 0; //点积>0 表示方向相近
         }
     }
     /// <summary>
@@ -967,25 +1051,42 @@ namespace SimpleRT
     /// </summary>
     public class Dielectirc : Material
     {
-        //相对空气的折射率
+        //相对空气的折射率 //一般认为空气折射率是1
         float ref_idx;
         public Dielectirc(float ri) { ref_idx = ri; }
         public override bool scatter(Ray rayIn, HitRecord record, ref Color attenuation, ref Ray scattered)
         {
             Vector3 outNormal;
-            Vector3 reflected = _M.reflect(rayIn.direction, record.normal);
-            //透明的物体当然不会吸收任何
+
+            // reflect 中实际上是点乘  因此第一个参数是否归一化理论不影响
+            Vector3 reflected = _M.reflect(rayIn.normalDirection, record.normal);
+
+
+            //透明的物体当然不会吸收任何光线
             attenuation = Color.white;
             float ni_no = 1f;
             Vector3 refracted = Vector3.zero;
             float cos = 0;
             //反射比
             float reflect_prob = 0;
+
+            //回忆一下二次公式 最常见的情况 一个光束 和 球 有两个交点
             //假如光线是从介质内向介质外传播，那么法线就要反转一下
+
+            // 点积 a.b < 0 则 ab 是钝角(基本不同方向)
+            // 注意一下 record的法线都是外表面的法线
+            // 当光线和外表面法线几乎同方向的时候
+            // 表示从光线正从球内射出
             if (Vector3.Dot(rayIn.direction, record.normal) > 0)
             {
+                // 那么法线就要反转一下
                 outNormal = -record.normal;
-                ni_no = ref_idx;
+                ni_no = ref_idx;//相对空气折射率
+
+                // 斯涅尔定律
+                // n1*sinθ1 = n2*sinθ2
+                // θ1是入射角  θ2是折射角
+                // n1  n2 分别是折射率
                 cos = ni_no * Vector3.Dot(rayIn.normalDirection, record.normal);
             }
             else
@@ -1002,16 +1103,19 @@ namespace SimpleRT
             else
             {
                 //此时反射比为100%
-                reflect_prob = 1;
+                // reflect_prob = 1;
+                reflect_prob = _M.schlick(cos, ref_idx);
             }
+
+
             //因为一条光线只会采样一个点，所以这里就用蒙特卡洛模拟的方法，用概率去决定数值
             if (_M.R() <= reflect_prob)
             {
-                scattered = scattered = new Ray(record.p, reflected);
+                scattered = new Ray(record.p, reflected);
             }
             else
             {
-                scattered = scattered = new Ray(record.p, refracted);
+                scattered = new Ray(record.p, refracted);
             }
             return true;
         }
