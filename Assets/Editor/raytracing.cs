@@ -667,21 +667,34 @@ namespace SimpleRT
         #endregion
         #region 第12 随机球大场景
         Color[] CreateColorForTestRandomBalls(int width, int height)
-        {
-            //视锥体的左下角、长宽和起始扫射点设定
-            Vector3 lowLeftCorner = new Vector3(-2, -1, -1);
+        {   
+            // 在simpleCamer中视锥体的左下角、长宽和起始扫射点设定
+            // Vector3 lowLeftCorner = new Vector3(-2, -1, -3);
+            // 对于camera 视锥体的大小由lookAt 和 lookFrom 决定
+
             Vector3 horizontal = new Vector3(4, 0, 0);
             Vector3 vertical = new Vector3(0, 2, 0);
             Vector3 original = new Vector3(0, 0, 0);
+            //在simpleCamera 中的摄像机的光线出发点一般就是origin
+            //但是Camera中的ray出发点是 lookFrom
+
             int l = width * height;
             //这里注释的两句话是随机场景渲染用的……
-            //三个大球的位置 (0, 1, 0)  (-4, 1, 0)  (4, 1, 0)
+            //三个大球的位置 金属球(0, 1, 0)  漫反射(-4, 1, 0)  玻璃球(4, 1, 0) 且半径都是1
             HitableList hitableList = _M.CreateRandomScene();
             Color[] colors = new Color[l];
-            Vector3 from = new Vector3(0, 1, 0);
-            Vector3 to = new Vector3(10, 7f, -2);
 
-            Camera camera = new Camera(from, to, new Vector3(3, 10, 0), 90, width / height);
+            // from(0 1 0) to(10 1 0) 和 from(0 1 0) to (1 1 0) 理论上效果一样？Yes            
+            // from(0 1 0) to (1 1 0) 和 from(2 1 0) to (3 1 0) 理论上效果一样？Yes
+            // from(2.5f, 1, -6) to(2.5f, 1, 6)应该可以看到3个球？ Yes
+            // from(2.5f, 3, -3) to(-5, 1, 3) //视野范围3的话(3+3)其实还不够  有交大形变
+            // 所以后面采用了6
+            Vector3 from = new Vector3(5f, 3, -6);
+            Vector3 to = new Vector3(-5, 1, 6);
+
+
+            // vup 这里并不是摄像头的位置 // vup 是用来控制摄像头围绕lookup的方向旋转的
+            Camera camera = new Camera(from, to, new Vector3(0, 30, 0), 50, width / height);
             //Camera camera = new Camera(from, to, Vector3.up, 35, width / height);
             float recip_width = 1f / width;
             float recip_height = 1f / height;
@@ -690,12 +703,12 @@ namespace SimpleRT
                 for (int i = 0; i < width; i++)
                 {
                     Color color = new Color(0, 0, 0);
-                    for (int s = 0; s < SAMPLE / 33; s++)
+                    for (int s = 0; s < SAMPLE; s++)
                     {
                         Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
                         color += GetColorForTestCamera(r, hitableList, 0);
                     }
-                    color *= SAMPLE_WEIGHT * 33;
+                    color *= SAMPLE_WEIGHT;
                     //为了使球体看起来更亮，改变gamma值
                     color = new Color(Mathf.Sqrt(color.r), Mathf.Sqrt(color.g), Mathf.Sqrt(color.b), 1f);
                     color.a = 1f;
@@ -844,8 +857,8 @@ namespace SimpleRT
             position = lookFrom;
 
             // w u v 的含义在书中有图片说明
-            //w = (lookat - lookFrom).normalized;// 在书中用的 lookFrom - lookat
-            w = (lookFrom - lookat).normalized;
+            w = (lookat - lookFrom).normalized;// 在书中用的 lookFrom - lookat
+            // w = (lookFrom - lookat).normalized;
             u = Vector3.Cross(vup, w).normalized;
             v = Vector3.Cross(w, u).normalized;
             lowLeftCorner = lookFrom + w * focus_dist - halfWidth * u * focus_dist - halfHeight * v * focus_dist;
@@ -959,9 +972,9 @@ namespace SimpleRT
                             list.list.Add(new Sphere(center, 0.2f, new Dielectirc(1.5f)));
                     }
                 }
-            list.list.Add(new Sphere(new Vector3(0, 1, 0), 1, new Dielectirc(1.5f)));
-            list.list.Add(new Sphere(new Vector3(-4, 1, 0), 1, new Lambertian(new Color(0.9f, 0.5f, 0.1f))));
-            list.list.Add(new Sphere(new Vector3(4, 1, 0), 1, new Metal(new Color(0.7f, 0.6f, 0.5f), 0.01f)));
+            list.list.Add(new Sphere(new Vector3(0, 1, 0), 1, new Metal(new Color(0.1f, 0.6f, 0.5f), 0.01f)));
+            list.list.Add(new Sphere(new Vector3(-4, 1, 0), 1, new Lambertian(new Color(0.9f, 0.2f, 0.1f))));
+            list.list.Add(new Sphere(new Vector3(4, 1, 0), 1, new Dielectirc(1.5f)));
             return list;
         }
 
