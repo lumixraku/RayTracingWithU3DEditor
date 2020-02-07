@@ -62,6 +62,11 @@ namespace SimpleRT
             {
                 CreatePng(WIDTH, HEIGHT, CreateColorForTestDefocus(WIDTH, HEIGHT));
             }
+            if (GUILayout.Button("测试超大随机场景"))
+            {
+                CreatePng(WIDTH, HEIGHT, CreateColorForTestRandomBalls(WIDTH, HEIGHT));
+            }
+
         }
         #region 参数设定
         const string IMG_PATH = @"/Users/lilin/unity/raytrace/1.png";
@@ -446,14 +451,7 @@ namespace SimpleRT
             return colors;
         }
         #endregion
-
-
-
-        // 传统右手坐标系 Z值越小 离人眼越近
-        // 之前调整参数 光源在 0 0 3 的位置
-        // 屏幕Z轴在 -3 的位置
-
-        #region 第九版（测试透明）
+        #region 第九版（测试透明）      
         Color GetColorForTestDielectric(Ray ray, HitableList hitableList, int depth)
         {
             HitRecord record = new HitRecord();
@@ -477,6 +475,9 @@ namespace SimpleRT
         }
 
         // 测试透明模型
+        // 传统右手坐标系 Z值越小 离人眼越近
+        // 之前调整参数 光源在 0 0 3 的位置
+        // 屏幕Z轴在 -3 的位置          
         Color[] CreateColorForTestDielectric(int width, int height)
         {
             // 透明材料（例如水，玻璃和钻石）是电介质。 当光线射到它们上时，它分裂为反射射线和折射（透射）射线。 
@@ -503,6 +504,7 @@ namespace SimpleRT
             // 1.3 是水的折射率  玻璃折射率是1.5
 
             Color[] colors = new Color[l];
+            // 为了减小形变  让摄像头离屏幕远一点
             SimpleCamera camera = new SimpleCamera(original + new Vector3(0, 0, 3), lowLeftCorner, horizontal, vertical);
             float recip_width = 1f / width;
             float recip_height = 1f / height;
@@ -582,12 +584,12 @@ namespace SimpleRT
                 for (int i = 0; i < width; i++)
                 {
                     Color color = new Color(0, 0, 0);
-                    for (int s = 0; s < SAMPLE/10; s++)
+                    for (int s = 0; s < SAMPLE / 10; s++)
                     {
                         Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
                         color += GetColorForTestCamera(r, hitableList, 0);
                     }
-                    color *= SAMPLE_WEIGHT*10;
+                    color *= SAMPLE_WEIGHT * 10;
                     //为了使球体看起来更亮，改变gamma值
                     color = new Color(Mathf.Sqrt(color.r), Mathf.Sqrt(color.g), Mathf.Sqrt(color.b), 1f);
                     color.a = 1f;
@@ -663,6 +665,50 @@ namespace SimpleRT
             return colors;
         }
         #endregion
+        #region 第12 随机球大场景
+        Color[] CreateColorForTestRandomBalls(int width, int height)
+        {
+            //视锥体的左下角、长宽和起始扫射点设定
+            Vector3 lowLeftCorner = new Vector3(-2, -1, -1);
+            Vector3 horizontal = new Vector3(4, 0, 0);
+            Vector3 vertical = new Vector3(0, 2, 0);
+            Vector3 original = new Vector3(0, 0, 0);
+            int l = width * height;
+            //这里注释的两句话是随机场景渲染用的……
+            //三个大球的位置 (0, 1, 0)  (-4, 1, 0)  (4, 1, 0)
+            HitableList hitableList = _M.CreateRandomScene();
+            Color[] colors = new Color[l];
+            Vector3 from = new Vector3(0, 1, 0);
+            Vector3 to = new Vector3(10, 7f, -2);
+
+            Camera camera = new Camera(from, to, new Vector3(3, 10, 0), 90, width / height);
+            //Camera camera = new Camera(from, to, Vector3.up, 35, width / height);
+            float recip_width = 1f / width;
+            float recip_height = 1f / height;
+            for (int j = 0; j <= height - 1; j++)
+            {
+                for (int i = 0; i < width; i++)
+                {
+                    Color color = new Color(0, 0, 0);
+                    for (int s = 0; s < SAMPLE / 33; s++)
+                    {
+                        Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
+                        color += GetColorForTestCamera(r, hitableList, 0);
+                    }
+                    color *= SAMPLE_WEIGHT * 33;
+                    //为了使球体看起来更亮，改变gamma值
+                    color = new Color(Mathf.Sqrt(color.r), Mathf.Sqrt(color.g), Mathf.Sqrt(color.b), 1f);
+                    color.a = 1f;
+                    colors[i + j * width] = color;
+                }
+                EditorUtility.DisplayProgressBar("", "", j / (float)height);
+            }
+            EditorUtility.ClearProgressBar();
+            return colors;
+        }
+        #endregion
+
+
         #region 图像生成
         void CreatePng(int width, int height, Color[] colors)
         {
@@ -786,7 +832,7 @@ namespace SimpleRT
         public float radius;
 
         ///此处FOV是欧拉角
-        // vfov表示视野范围（类似于广角镜头的概念）
+        // vfov表示视野范围  数值越大
         // vup 是摄像头所在的位置
         // lookFrom 和 lookat 共同决定摄像头的的朝向  也就是相机往哪边看的问题
         public Camera(Vector3 lookFrom, Vector3 lookat, Vector3 vup, float vfov, float aspect, float r = 0, float focus_dist = 1)
@@ -798,7 +844,8 @@ namespace SimpleRT
             position = lookFrom;
 
             // w u v 的含义在书中有图片说明
-            w = (lookat - lookFrom).normalized;
+            //w = (lookat - lookFrom).normalized;// 在书中用的 lookFrom - lookat
+            w = (lookFrom - lookat).normalized;
             u = Vector3.Cross(vup, w).normalized;
             v = Vector3.Cross(w, u).normalized;
             lowLeftCorner = lookFrom + w * focus_dist - halfWidth * u * focus_dist - halfHeight * v * focus_dist;
@@ -917,6 +964,7 @@ namespace SimpleRT
             list.list.Add(new Sphere(new Vector3(4, 1, 0), 1, new Metal(new Color(0.7f, 0.6f, 0.5f), 0.01f)));
             return list;
         }
+
     }
     #endregion
     #region 各式各样的SDF类
