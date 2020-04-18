@@ -218,7 +218,7 @@ namespace SimpleRT
             }
             float t = 0.5f * ray.normalDirection.y + 1f;
 
-            // 控制浅蓝的背景色  
+            // 控制浅蓝的背景色
             return (1 - t) * new Color(1, 1, 1) + t * new Color(0.5f, 0.7f, 1);
         }
 
@@ -261,7 +261,7 @@ namespace SimpleRT
             }
             float t = 0.5f * ray.normalDirection.y + 1f;
 
-            // 控制浅蓝的背景色  
+            // 控制浅蓝的背景色
             return (1 - t) * new Color(1, 1, 1) + t * new Color(0.5f, 0.7f, 1);
         }
 
@@ -329,7 +329,7 @@ namespace SimpleRT
             //while (p.sqrMagnitude > 1f); // sqrMagnitude  返回向量的长度
             return p;
         }
-        // https://www.guokr.com/question/569971/ 
+        // https://www.guokr.com/question/569971/
         // 光线追踪 如果遇到漫反射面的话一般是需要产生非常多的次级射线往下递归才能达到比较好的效果（否则噪点比较明显）
         Color GetColorForTestDiffusing(Ray ray, HitableList hitableList)
         {
@@ -428,7 +428,7 @@ namespace SimpleRT
             Color[] colors = new Color[l];
 
             //之前的视觉锥体变形比较厉害  现在把摄像机离远一点
-            //右手坐标系  屏幕的z轴是 -1 
+            //右手坐标系  屏幕的z轴是 -1
             SimpleCamera camera = new SimpleCamera(original + new Vector3(0, 0, 3), lowLeftCorner, horizontal, vertical);
             float recip_width = 1f / width;
             float recip_height = 1f / height;
@@ -451,7 +451,7 @@ namespace SimpleRT
             return colors;
         }
         #endregion
-        #region 第九版（测试透明）      
+        #region 第九版（测试透明）
         Color GetColorForTestDielectric(Ray ray, HitableList hitableList, int depth)
         {
             HitRecord record = new HitRecord();
@@ -477,10 +477,10 @@ namespace SimpleRT
         // 测试透明模型
         // 传统右手坐标系 Z值越小 离人眼越近
         // 之前调整参数 光源在 0 0 3 的位置
-        // 屏幕Z轴在 -3 的位置          
+        // 屏幕Z轴在 -3 的位置
         Color[] CreateColorForTestDielectric(int width, int height)
         {
-            // 透明材料（例如水，玻璃和钻石）是电介质。 当光线射到它们上时，它分裂为反射射线和折射（透射）射线。 
+            // 透明材料（例如水，玻璃和钻石）是电介质。 当光线射到它们上时，它分裂为反射射线和折射（透射）射线。
 
             //视锥体的左下角、长宽和起始扫射点设定
             Vector3 lowLeftCorner = new Vector3(-2, -1, -3);
@@ -564,10 +564,10 @@ namespace SimpleRT
             //下方的绿色球
             hitableList.list.Add(new Sphere(new Vector3(0, -100.5f, -1), 100f, new Lambertian(new Color(0.8f, 0.8f, 0.0f))));
 
-            // 右侧的球 调整FOV后在最上方
+            // 右侧的蓝色球 调整FOV后在最上方
             hitableList.list.Add(new Sphere(new Vector3(1, 0, -1), 0.5f, new Metal(new Color(0.2f, 0.6f, 0.9f), 0f)));
 
-            // 左侧的球 调整FOV
+            // 左侧的玻璃球 调整FOV后就是离相机最近的位置
             hitableList.list.Add(new Sphere(new Vector3(-1, 0, -1), 0.5f, new Dielectirc(1.5f)));
 
             Color[] colors = new Color[l];
@@ -576,8 +576,10 @@ namespace SimpleRT
             // Vector3.up 就是 Vector3(0, 1, 0).
 
             //public Camera(Vector3 lookFrom, Vector3 lookat, Vector3 vup, float vfov, float aspect, float r = 0, float focus_dist = 1)
-            //
-            Camera camera = new Camera(new Vector3(-2, 2f, 1), new Vector3(0, 0, -1), Vector3.up, 75, width / height);
+            // vfov 似乎在控制相机和物体的远近 值越小越近
+            Camera camera = new Camera(new Vector3(-2, 2f, 1), new Vector3(0, 0, -1), Vector3.up, 25, width / height);
+
+
             float recip_width = 1f / width;
             float recip_height = 1f / height;
             for (int j = height - 1; j >= 0; j--)
@@ -667,7 +669,7 @@ namespace SimpleRT
         #endregion
         #region 第12 随机球大场景
         Color[] CreateColorForTestRandomBalls(int width, int height)
-        {   
+        {
             // 在simpleCamer中视锥体的左下角、长宽和起始扫射点设定
             // Vector3 lowLeftCorner = new Vector3(-2, -1, -3);
             // 对于camera 视锥体的大小由lookAt 和 lookFrom 决定
@@ -684,10 +686,10 @@ namespace SimpleRT
             HitableList hitableList = _M.CreateRandomScene();
             Color[] colors = new Color[l];
 
-            // from(0 1 0) to(10 1 0) 和 from(0 1 0) to (1 1 0) 理论上效果一样？Yes            
+            // from(0 1 0) to(10 1 0) 和 from(0 1 0) to (1 1 0) 理论上效果一样？Yes
             // from(0 1 0) to (1 1 0) 和 from(2 1 0) to (3 1 0) 理论上效果一样？Yes
             // from(2.5f, 1, -6) to(2.5f, 1, 6)应该可以看到3个球？ Yes
-            // from(2.5f, 3, -3) to(-5, 1, 3) //视野范围3的话(3+3)其实还不够  有交大形变
+            // from(2.5f, 3, -3) to(-5, 1, 3) //视野范围3的话(3+3)其实还不够  有较大形变
             // 所以后面采用了6
             Vector3 from = new Vector3(5f, 3, -6);
             Vector3 to = new Vector3(-5, 1, 6);
@@ -931,7 +933,7 @@ namespace SimpleRT
         }
 
 
-        // 菲涅尔（发音为Fresnel）方程描述的是被反射的光线对比光线被折射的部分所占的比率，这个比率会随着我们观察的角度不同而不同。        
+        // 菲涅尔（发音为Fresnel）方程描述的是被反射的光线对比光线被折射的部分所占的比率，这个比率会随着我们观察的角度不同而不同。
         // 反射系数的求解是是一个非常复杂的过程，Christophe Schlick这个人提供一个逼近公式，这个公式被称为“ChristopheSchlick’s Approximation”。Wiki链接：
         // https://en.wikipedia.org/wiki/Schlick%27s_approximation
 
