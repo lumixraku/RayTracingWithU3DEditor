@@ -341,7 +341,7 @@ namespace SimpleRT
                 //此处假定有50%的光被吸收，剩下的则从入射点开始取随机方向再次发射一条射线
                 //return 0.5f * GetColorForTestDiffusing(new Ray(record.p, target - record.p), hitableList);
 
-                // 即便稳重说的是使用随机的光线 但是即使是漫反射 也还是和物体本身的法线方向相关的  //所以这里还需要考虑到法线
+                // 即便文中说的是使用随机的光线 但是即使是漫反射 也还是和物体本身的法线方向相关的  //所以这里还需要考虑到法线
                 return 0.5f * GetColorForTestDiffusing(new Ray(record.p, record.normal + GetRandomPointInUnitSphereForTestDiffusing() * 0.5f), hitableList);
             }
             float t = 0.5f * ray.normalDirection.y + 1f;
@@ -432,14 +432,25 @@ namespace SimpleRT
             SimpleCamera camera = new SimpleCamera(original + new Vector3(0, 0, 3), lowLeftCorner, horizontal, vertical);
             float recip_width = 1f / width;
             float recip_height = 1f / height;
+            // Debug.LogFormat("Hitable discriminant {0} {1}", recip_width, recip_height);
+
             for (int j = height - 1; j >= 0; j--)
                 for (int i = 0; i < width; i++)
                 {
+                    if ( i % 10 == 0 && j % 10 == 0) {
+                        Debug.LogFormat("r u v {0} {1}    {2} {3}",  i, j, (i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
+
+                    }
+
                     Color color = new Color(0, 0, 0);
                     for (int s = 0; s < SAMPLE / 10; s++)
                     {
                         // 光线的出发点就是摄像机
-                        Ray r = camera.CreateRay((i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
+                        // (i + _M.R()) * recip_width 都是小范围发散光线
+                        Ray r = camera.CreateRay( (i + _M.R()) * recip_width, (j + _M.R()) * recip_height);
+
+
+
                         color += GetColorForTestMetal(r, hitableList, 0);
                     }
                     color *= SAMPLE_WEIGHT * 10f;
@@ -866,6 +877,7 @@ namespace SimpleRT
             lowLeftCorner = lookFrom + w * focus_dist - halfWidth * u * focus_dist - halfHeight * v * focus_dist;
             horizontal = 2 * halfWidth * focus_dist * u;
             vertical = 2 * halfHeight * focus_dist * v;
+
         }
         public Ray CreateRay(float x, float y)
         {
@@ -876,6 +888,7 @@ namespace SimpleRT
             {
                 Vector3 rd = radius * _M.GetRandomPointInUnitDisk();
                 Vector3 offset = rd.x * u + rd.y * v;
+
                 return new Ray(position + offset, lowLeftCorner + x * horizontal + y * vertical - position - offset);
             }
         }
@@ -898,6 +911,8 @@ namespace SimpleRT
         public static Vector3 GetRandomPointInUnitSphere()
         {
             Vector3 p = 2f * new Vector3(_M.R(), _M.R(), _M.R()) - Vector3.one;
+            // 变化区间在 [-1, 1]
+
             p = p.normalized * _M.R();
             return p;
         }

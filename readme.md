@@ -57,13 +57,21 @@ Math.Tan(xxx) 这里xxx 都是弧度, 要计算角度的话 需要 Math.Tan(π/1
 
 例如当你在 GetColorForTestSphere 把球坐标改为 (1, 0, -1) 时, 得到结果是
 
-[!image](https://raw.githubusercontent.com/lumixraku/RayTracingWithU3DEditor/master/畸变.png)
+![image](https://raw.githubusercontent.com/lumixraku/RayTracingWithU3DEditor/master/畸变.png)
 
 不过要是稍微把球放远一点(1, 0, -2), 这个情况就会好很多.
 
-[!image](https://raw.githubusercontent.com/lumixraku/RayTracingWithU3DEditor/master/畸变1.png)
+![image](https://raw.githubusercontent.com/lumixraku/RayTracingWithU3DEditor/master/畸变1.png)
 
 当然, 也可以移动相机的位置, 部分场景中我摄像机放在(0,0,3)的位置
+
+
+## 关于HitRecord
+
+- t 是碰撞时光线的长度
+- p 是光线和球碰撞的点, 也就是交汇点
+- normal 是交汇点的法线(通过 p - center 得到)
+- material 不同的材料会对碰撞的光线有不同的行为
 
 # 抗锯齿
 
@@ -76,13 +84,45 @@ Math.Tan(xxx) 这里xxx 都是弧度, 要计算角度的话 需要 Math.Tan(π/1
 
 使用了随机算法来采样, 详情 GetColorForTestAntialiasing.
 
-额外多发出了很多条光线, 这些光线在原有的光线方向上略微有些发散, 最后取得到的颜色的均值.
+针对每个像素点, 光源(也就是摄像机所在位置)都再额外多发出100条光线去采样计算, 这些光线在原有的光线方向上略微有些发散, 最后取得到的颜色的均值.
+
+
+# 散射
+
+本篇仅说明 diffuse
+
+详情 CreateColorForTestDiffusing
+
+GetColorForTestDiffusing 会递归调用
+
+同样针对每个像素点, 都再发射一些光线计算.
+
+record 是光线和球碰撞交汇的记录. 碰撞点都再次发出光线(衰减50%), 这些光线方向随机, 再次参与光线碰撞计算.
+
+PS (漫反射场景有两个球, 底部有一个很大的球, 存在光线的弹射)
+
+如果去掉底部那个球, 呈现的结果会是一个很光滑的蓝色球.
+
+![image](https://raw.githubusercontent.com/lumixraku/RayTracingWithU3DEditor/master/漫反射.png)
+![image](https://raw.githubusercontent.com/lumixraku/RayTracingWithU3DEditor/master/漫反射2.png)
+
+
+## 镜面
+详情 CreateColorForTestMetal
+
+GetColorForTestMetal 中对每一个光线打到的碰撞点有scatter 函数
+
+这个HitRecord 会调用不同材质的散射函数.
+
+- 对于漫反射, 得到的光的方向时随机的, 向四面八方
+- 对于金属类型, 根据设置的fuzz 加上一定程度的漫反射(也就是常说的 glossy 的概念),
+  剩下的最主要的还是反射(需要知道入射光线和法线才好做反射),
+
+- 电解质(玻璃) 需要反射和折射
 
 # 测试相机FOV和位置角度
 
-
-
-[!image](https://raw.githubusercontent.com/lumixraku/RayTracingWithU3DEditor/master/FOV.png)
+![image](https://raw.githubusercontent.com/lumixraku/RayTracingWithU3DEditor/master/FOV.png)
 
 
 详情 GetColorForTestCamera  L552
